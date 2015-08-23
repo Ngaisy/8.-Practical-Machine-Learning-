@@ -1,0 +1,136 @@
+---
+output: pdf_document
+---
+# Data Science Study: Human Activity Prediction and Recognition  
+
+## **Introduce** 
+In this study, we apply machine learning theory to predict and recongite human activity. With the data collected from wearable device, certain human action can be predicted. Through building prediction model, we are able to achieve 99.5% accuracy and at the end of the study, we apply our designed prediction model to predict another 20 objects. All the data used in the study is from Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements by Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+
+## **Ananlysis Process**
+### - Load and reform the data set
+```{r}
+rm(list = ls())
+if(exists("training") == F) {
+dir <- "/Users/Shawn/Documents/BigData/Coursea/8. Practical Machine Learning //Project 1"
+setwd(dir)
+training <- read.csv("pml-training.csv", 
+                     header = T,
+                     na.strings = c("NA", "#DIV/0!"))
+}
+
+library(ggplot2)
+library(lattice)
+library(caret)
+```
+###  - Clean up the training set 
+#### First, we apply function "nearZeroVar" to filter out the column has most of NA or useless data
+```{r}
+colno_na_training <- nearZeroVar(training);
+training1 <- training[,-colno_na_training]
+```
+
+#### Secondly, we leave out the columns with high precentage of NA by filtering out the columns contains more 80% NA.  
+```{r}
+na_colnum = c()
+for(i in 1:dim(training1)[2]){
+  if(sum(is.na(training1[,i]) == T)/dim(training1)[1] > 0.8){
+    na_colnum <- c(na_colnum, i);
+  }
+}
+training2 <- training1[,-na_colnum]
+```
+
+#### Lastly, we remove the user information and classe away. 
+```{r}
+col_usinf_class <- c(1:6)
+training3 <- training2[, -col_usinf_class]
+```
+
+### - Generate training set into train and test set
+```{r }
+inTrain <- createDataPartition(training3$classe, p = 0.75, list = F)
+training3_train <- training3[inTrain,]
+training3_test <- training3[-inTrain, ]
+```
+
+### - Predict result of the training set aparted from train data
+#### We will apply statistic method "Ramdon Tree" to build fitting model. 
+```{r }
+fitControl <- trainControl(method="cv", 
+                         number=5, 
+                         allowParallel=T, 
+                         verbose = F)
+library(randomForest)                 
+modelFit <- train(classe~.,
+                  data=training3_train, 
+                  method="rf", 
+                  trControl=fitControl, 
+                  verbose=F,
+                  returnData = T);
+```
+
+#### To examine the accuracy of the fitting model, we apply the ramdon tree building model to predict the "classe" of test set. 
+```{r }
+pred <- predict(modelFit, newdata = training3_test)
+```
+
+#### Then, we compare the predicted and collected data.
+```{r }
+confusionMatrix(pred, training3_test$classe)
+```
+#### **From the comparsion report, we find that the fitting model achieves 99.4% accuracy on the prediction of the test set, which encourages us to apply the fitting model to predict classe of the 20 objects.**
+
+## **Predict the classe on testing objects**
+### - Loading the test data of the 20 objects.
+```{r}
+if(exists("testing") == F){ 
+  testing <- read.csv("pml-testing.csv", 
+                       header = T,
+                       na.strings = c("NA", "#DIV/0!"))
+}
+```
+
+### - Clean up the testing set 
+#### Repeat the data rearranging process applied on training data set on test data
+```{r}
+# Clean the dataset by leaving out the columns with many NAs
+colno_na_testing <- nearZeroVar(testing);
+testing1 <- testing[,-colno_na_testing]
+
+# Leave out the dataset with high precentage of NA.
+na_colnum = c()
+for(i in 1:dim(testing1)[2]){
+  if(sum(is.na(testing1[,i]) == T)/dim(testing1)[1] > 0.3){
+    na_colnum <- c(na_colnum, i);
+  }
+}
+if(is.null(na_colnum) == T){
+  testing2 <- testing1
+} else {
+  testing2 <- testing1[,-na_colnum]
+}
+
+# Remove the user information
+col_usinf_class <- c(1:6)
+testing3 <- testing2[, -col_usinf_class]
+```
+
+### - Predicting and demonstrating classe of the test set
+```{r}
+pred_res<-predict(modelFit, newdata=testing3)
+pred_res
+```
+
+### - Generating the text file for the predicted result
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pred_res)
+```
